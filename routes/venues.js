@@ -1,19 +1,17 @@
 const express = require('express');
-const { body } = require('express-validator/check');
-
+const { body } = require('express-validator');
 const router = express.Router();
-
-const venuesController = require('../controllers/venues')
+const venuesController = require('../controllers/venues');
+const isAuth = require('../middleware/is-auth');
 
 router.get('/venues', venuesController.getVenues);
 
-router.post('/venue', [
-    body('title')
-        .trim()
-        .isLength({ min: 5 }),
-    body('title')
-        .trim()
-        .isLength({ min: 5 }),
-], venuesController.createVenue);
+router.post('/venue', isAuth, venuesController.createVenue);
+
+router.get('/venue/:venueId', isAuth, venuesController.getVenue);
+
+router.put('/venue/:venueId', isAuth, venuesController.updateVenue);
+
+router.delete('/venue/:venueId', isAuth, venuesController.deleteVenue);
 
 module.exports = router;

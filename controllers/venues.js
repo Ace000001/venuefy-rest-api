@@ -1,58 +1,110 @@
-const { validationResult } = require('express-validator/check');
+const fs = require('fs');
+const path = require('path');
 
-exports.getVenues = (req, res, next) => {
-    res.status(200).json({
-        venues: [{
-            _id: 'v1',
-            ownerId: 'u1',
-            title: 'The Paradise Banquet Hall',
-            imageUrl: 'https://source.unsplash.com/dS2hi__ZZMk/840x840',
-            imageLibrary: [
-                'https://www.gstatic.com/webp/gallery/1.jpg',
-                'https://source.unsplash.com/1024x768/?woman',
-                'https://source.unsplash.com/1024x768/?ice',
-                'https://source.unsplash.com/1024x768/?hotel',
-                'https://source.unsplash.com/1024x768/?bar',
-                'https://source.unsplash.com/1024x768/?smoke',
-                'https://source.unsplash.com/1024x768/?summer',
-                'https://source.unsplash.com/1024x768/?winter',
-                'https://source.unsplash.com/1024x768/?autum',
-                'https://source.unsplash.com/1024x768/?spring',
-                'https://source.unsplash.com/1024x768/?girl',
-                'https://source.unsplash.com/1024x768/?tree',
-                'https://source.unsplash.com/1024x768/?water'
-            ],
-            facilities: [
-                { name: 'energy', type: 'simple-line-icon', text: 'Gym' },
-                { name: 'air', type: 'entypo', text: 'AC' },
-                { name: 'tree', type: 'font-awesome', text: 'Park' },
-                { name: 'car', type: 'font-awesome-5', text: 'Transportation' },
-                { name: 'food', type: 'material-community', text: 'Meal' },
-                { name: 'check', type: 'feather', text: 'Bridel Room' },
-                { name: 'pool', type: 'material-icon', text: 'Pool' }
-            ],
-            pricePerHead: '500',
-            minOcc: '50',
-            maxOcc: '250',
-            location: { latitude: 31.383859, longitude: 74.173177 },
-            address: '406-E, Canal Gardens, Lahore, Pakistan',
-            contactNo: '+923314018408'
-        }],
-    });
+const Venue = require('../models/venue');
+const User = require('../models/user');
+const mapper = require('../util/mapper');
+const errorHandler = require('../util/errorHandler');
+
+const clearImage = filePath => {
+    filePath = path.join(__dirname, '..', filePath);
+    fs.unlink(filePath, err => console.log(err));
+}
+
+exports.getVenues = async (req, res, next) => {
+    try {
+        const currentPage = req.query.page || 1;
+        const perPage = req.query.perPage || 10;
+        let totalItems = await Venue.find().countDocuments();
+        const venues = await Venue.find()
+            .skip((currentPage - 1) * perPage)
+            .limit(perPage);
+        res.status(200).json({ message: 'Fetch venues successfully.', venues: venues, totalItems: totalItems });
+    }
+    catch (err) {
+        errorHandler.serverError(err);
+        next(err);
+    }
 };
 
-exports.createVenue = (req, res, next) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-        return res.status(422).json({
-            message: 'Valisation failed, entered data is incorrect.',
-            errors: errors.array()
-        })
+exports.createVenue = async (req, res, next) => {
+    try {
+        errorHandler.validationErrors(req);
+        let venue = new Venue();
+        let creator;
+        mapper.mapVenue(req, venue);
+        const result = await venue.save();
+        const user = await User.findById(req.userId);
+        creator = user;
+        user.venues.push(venue);
+        const userResult = await user.save();
+        res.status(201).json({
+            message: "venue added successfully!",
+            venue: venue,
+            creator: { _id: creator._id, name: creator.name }
+        });
     }
-    const title = req.body.title;
-    //create venue in db
-    res.status(201).json({
-        message: "venue added successfully!",
-        venue: { title: "First Request" },
-    });
+    catch (err) {
+        errorHandler.serverError(err);
+        next(err);
+    };
+};
+
+exports.getVenue = async (req, res, next) => {
+    const venueId = req.params.venueId;
+    try {
+        const venue = await Venue.findById(venueId);
+        if (!venue) {
+            errorHandler.notFound('Could not find venue.');
+        }
+        res.status(200).json({ message: 'Venue fetched.', venue: venue });
+    }
+    catch (err) {
+        errorHandler.serverError(err);
+        next(err);
+    };
+};
+
+exports.updateVenue = async (req, res, next) => {
+    try {
+        errorHandler.validationErrors(req);
+        const venueId = req.params.venueId;
+        let venue = await Venue.findById(venueId);
+        if (!venue) {
+            errorHandler.notFound('Could not find venue.');
+        }
+        const oldImageUrl = venue.imageUrl;
+        mapper.mapVenue(req, venue);
+        //image cleanup
+        if (venue.imageUrl !== oldImageUrl) {
+            clearImage(oldImageUrl);
+        }
+        const updatedVenue = await venue.save();
+        res.status(200).json({ message: 'Venue updated.', venue: updatedVenue });
+    }
+    catch (err) {
+        errorHandler.serverError(err);
+        next(err);
+    };
+};
+
+exports.deleteVenue = async (req, res, next) => {
+    const venueId = req.params.venueId;
+    try {
+        const venue = await Venue.findById(venueId);
+        if (!venue) {
+            errorHandler.notFound('Could not find venue.');
+        }
+        //checked logged in user
+        clearImage(venue.imageUrl);
+        const result = await Venue.findByIdAndRemove(venueId);
+        const user = User.findById(req.userId);
+        user.venues.pull(venueId);
+        const userResult = user.save();
+        res.status(200).json({ message: 'Venue deleted.' });
+    }
+    catch (err) {
+        errorHandler.serverError(err);
+        next(err);
+    };
 };
