@@ -22,6 +22,11 @@ const userSchema = new Schema({
         type: Schema.Types.ObjectId,
         ref: 'Venue',
         required: true
+    }],
+    history: [{
+        type: Schema.Types.ObjectId,
+        ref: 'Venue',
+        required: false
     }]
 
 }, { timestamps: true });

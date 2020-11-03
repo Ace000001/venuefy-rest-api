@@ -16,9 +16,10 @@ exports.getVenues = async (req, res, next) => {
         const currentPage = req.query.page || 1;
         const perPage = req.query.perPage || 10;
         let totalItems = await Venue.find().countDocuments();
-        const venues = await Venue.find()
-            .skip((currentPage - 1) * perPage)
-            .limit(perPage);
+        // const venues = await Venue.find()
+        //     .skip((currentPage - 1) * perPage)
+        //     .limit(perPage);
+        const venues = await Venue.find().sort({createdAt: -1});
         res.status(200).json({ message: 'Fetch venues successfully.', venues: venues, totalItems: totalItems });
     }
     catch (err) {
@@ -66,6 +67,7 @@ exports.getVenue = async (req, res, next) => {
 };
 
 exports.updateVenue = async (req, res, next) => {
+    const baseUrl = req.protocol + '://' + req.headers.host + '/';
     try {
         errorHandler.validationErrors(req);
         const venueId = req.params.venueId;
@@ -77,7 +79,7 @@ exports.updateVenue = async (req, res, next) => {
         mapper.mapVenue(req, venue);
         //image cleanup
         if (venue.imageUrl !== oldImageUrl) {
-            clearImage(oldImageUrl);
+            clearImage(oldImageUrl.replace(baseUrl, ''));
         }
         const updatedVenue = await venue.save();
         res.status(200).json({ message: 'Venue updated.', venue: updatedVenue });
@@ -88,19 +90,70 @@ exports.updateVenue = async (req, res, next) => {
     };
 };
 
+exports.addHistory = async (req, res, next) => {
+    try {
+        const venueId = req.params.venueId;
+        let venue = await Venue.findById(venueId);
+        if (!venue) {
+            errorHandler.notFound('Could not find venue.');
+        }
+        
+        const user = await User.findById(req.userId);
+        user.history.pull(venue);
+        user.history.push(venue);
+        const userResult = user.save();
+
+        venue.activeUsers.pull(user);
+        venue.activeUsers.push(user);
+        const updatedVenue = venue.save();
+
+        res.status(200).json({ message: 'History updated.', venue: updatedVenue });
+    }
+    catch (err) {
+        errorHandler.serverError(err);
+        next(err);
+    };
+};
+
+exports.getHistory = async (req, res, next) => {
+    try {
+        const user = await User.findById(req.userId);
+        const venues = user.history;
+        res.status(200).json({ message: 'Fetch history successfully.', venues: venues });
+    }
+    catch (err) {
+        errorHandler.serverError(err);
+        next(err);
+    }
+};
+
 exports.deleteVenue = async (req, res, next) => {
+    const baseUrl = req.protocol + '://' + req.headers.host + '/';
+
     const venueId = req.params.venueId;
     try {
         const venue = await Venue.findById(venueId);
         if (!venue) {
             errorHandler.notFound('Could not find venue.');
         }
-        //checked logged in user
-        clearImage(venue.imageUrl);
+        clearImage(venue.imageUrl.replace(baseUrl, ''));
+        venue.imageLibrary.forEach(item => {
+            item.images.forEach(img => {
+                clearImage(img.replace(baseUrl, ''));
+            })
+        });
+        //delete history for every user
+        venue.activeUsers.forEach(async (usr) =>{
+            const activeUser = await User.findById(usr._id);
+            activeUser.history.pull(venueId);
+            activeUser.save();
+        });
         const result = await Venue.findByIdAndRemove(venueId);
-        const user = User.findById(req.userId);
+        //checked logged in user
+        const user = await User.findById(req.userId);
         user.venues.pull(venueId);
         const userResult = user.save();
+        
         res.status(200).json({ message: 'Venue deleted.' });
     }
     catch (err) {

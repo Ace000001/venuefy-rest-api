@@ -15,7 +15,14 @@ const veneuSchema = new Schema({
         type: String,
         required: true
     },
-    imageLibrary: [String],
+    imageLibrary: [
+        {
+            title: { type: String, required: true },
+            images: [
+                { type: String, required: true }
+            ],
+        }
+    ],
     facilities: [
         {
             name: { type: String, required: true },
@@ -52,7 +59,13 @@ const veneuSchema = new Schema({
     contactNo: {
         type: String,
         required: true
-    }
+    },
+    activeUsers:[{
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+        require: true
+    }],
+
 }, { timestamps: true });
 
 module.exports = mongoose.model('Venue', veneuSchema);
