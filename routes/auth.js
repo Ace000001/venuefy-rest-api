@@ -16,7 +16,10 @@ router.put('/signup', [
                 }
             })
         })
-        .normalizeEmail(),
+        .customSanitizer(value => {
+            return value.toLowerCase();
+        }),
+        // .normalizeEmail(),
     body('password')
         .trim()
         .isLength({min: 5}),
@@ -27,5 +30,7 @@ router.put('/signup', [
 ], authController.signup);
 
 router.post('/signin', authController.signin);
+
+router.post('/getuser', authController.getUser);
 
 module.exports = router;

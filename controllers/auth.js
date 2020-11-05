@@ -50,3 +50,28 @@ exports.signin = async (req, res, next) => {
         next(err);
     }
 }
+
+exports.getUser = async (req, res, next) => {
+    const email = req.body.email;
+    try {
+        const user = await User.findOne({ email: email });
+        if (!user) {
+            errorHandler.notFound('Could not find user.');
+        }
+        const token = jwt.sign({
+            email: user.email,
+            userId: user._id.toString()
+        }, settings.getAppSecret()/*, { expiresIn: '1h' }*/);
+        res.status(200).json({ 
+            token: token, 
+            userId: user._id.toString(),
+            name: user.name,
+            email: user.email,
+            role: user.role,
+        });
+    }
+    catch (err) {
+        errorHandler.serverError(err);
+        next(err);
+    };
+};
