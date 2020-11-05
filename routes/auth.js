@@ -16,10 +16,10 @@ router.put('/signup', [
                 }
             })
         })
-        .customSanitizer(value => {
-            return value.toLowerCase();
-        }),
-        // .normalizeEmail(),
+        // .customSanitizer(value => {
+        //     return value.toLowerCase();
+        // }),
+        .normalizeEmail({ gmail_remove_dots: false }),
     body('password')
         .trim()
         .isLength({min: 5}),
